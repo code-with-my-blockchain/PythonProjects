@@ -1,0 +1,59 @@
+import os
+from typing import Annotated
+from typing_extensions import TypedDict
+from langchain_core.messages import BaseMessage, HumanMessage
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langchain_google_genai import ChatGoogleGenerativeAI 
+from langgraph.checkpoint.memory import MemorySaver 
+
+
+API_KEY = "AQ.Ab8RN6KV_MH2tta-rX7VCN23mCisjztzaEJdpqbok6yNRqVCRQ"
+
+
+class ChatState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+
+
+def chat_node(state: ChatState):
+  
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=API_KEY)
+    messages = state['messages']
+    response = llm.invoke(messages)
+    return {"messages": [response]}
+
+
+graph = StateGraph(ChatState)
+graph.add_node("chat_node", chat_node)
+graph.add_edge(START, "chat_node")
+graph.add_edge("chat_node", END)
+
+checkpointer = MemorySaver()
+chatbot = graph.compile(checkpointer=checkpointer)
+
+
+config = {"configurable": {"thread_id": "unique_user_session_1"}}
+
+
+print("--- Chatbot Initialized (Type 'exit' to stop) ---")
+while True:
+    try:
+        user_message = input("\nYou: ")
+        if user_message.strip().lower() in ['exit', 'quit', 'by', 'bye']:
+            print("AI: Goodbye!")
+            break
+            
+        if not user_message.strip():
+            continue
+
+    
+        response = chatbot.invoke(
+            {"messages": [HumanMessage(content=user_message)]}, 
+            config=config
+        )
+       
+        ai_message = response['messages'][-1].content
+        print(f"AI: {ai_message}")
+        
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
