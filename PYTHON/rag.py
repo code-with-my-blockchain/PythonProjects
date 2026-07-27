@@ -27,7 +27,7 @@ retriever = vectorstore.as_retriever(
 )
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
+    model="gemini-2.5-flash",
     temperature=0
 )
 
@@ -87,7 +87,7 @@ def main():
 
             if question.lower() in ["exit", "quit", "q"]:
 
-                print("\nGood Bye 👋")
+                print("\nGood Bye ")
 
                 break
 
@@ -149,9 +149,9 @@ if dataset is None:
         dataset_name=DATASET_NAME,
         description="Questions and answers for PDF RAG"
     )
-    print("✅ Dataset Created")
+    print(" Dataset Created")
 else:
-    print("✅ Dataset Already Exists")
+    print(" Dataset Already Exists")
 
 print(dataset.id)
 
@@ -196,7 +196,7 @@ for ex in examples:
 
     )
 
-print("✅ Examples Added")
+print("Examples Added")
 
 from langsmith import Client
 from langsmith.evaluation import evaluate
@@ -246,7 +246,7 @@ from langchain_core.runnables import RunnableConfig
 
 config = RunnableConfig(
     metadata={
-        "llm": "gemini-1.5-flash",
+        "llm": "gemini-2.5-flash",
         "retriever": "faiss",
         "application": "pdf-rag",
     }
