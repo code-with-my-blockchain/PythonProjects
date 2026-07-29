@@ -4,29 +4,33 @@ from typing_extensions import TypedDict
 
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_chroma import Chroma
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_tavily import TavilySearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
+from langchain_community.tools.tavily_search import TavilySearchResults
 from pydantic import BaseModel, Field
 from langgraph.graph import END, StateGraph, START
 
 
 os.environ["USER_AGENT"] = "MyCorrectiveRAGApp/1.0"
 
-GOOGLE_API_KEY = "AQ.Ab8RN6KVCwITRW7ImqTdSTKI1w7HJDAbWURf2pCUZ_a1ZONnqA"
+
+GROQ_API_KEY = "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"      
 TAVILY_API_KEY = "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"
 
-os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 os.environ["TAVILY_API_KEY"] = TAVILY_API_KEY
+
+
 
 class GraphState(TypedDict):
     question: str
     generation: str
     web_search: str
     documents: List[Document]
+
 
 
 PERSIST_DIRECTORY = "./chroma_db_crag"
@@ -38,11 +42,10 @@ urls = [
 ]
 
 
-
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"},        
-    encode_kwargs={"normalize_embeddings": True}
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"normalize_embeddings": True},
 )
 
 if os.path.exists(PERSIST_DIRECTORY):
@@ -58,8 +61,7 @@ else:
     docs_list = [item for sublist in docs for item in sublist]
 
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=250,
-        chunk_overlap=0,
+        chunk_size=250, chunk_overlap=0
     )
     doc_splits = text_splitter.split_documents(docs_list)
 
@@ -74,7 +76,12 @@ else:
 retriever = vectorstore.as_retriever()
 
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",   # strong + free
+    temperature=0,
+    groq_api_key=GROQ_API_KEY,
+)
 
 class GradeDocuments(BaseModel):
     """Binary score for relevance check on retrieved documents."""
@@ -96,7 +103,7 @@ grade_prompt = ChatPromptTemplate.from_messages(
 )
 retrieval_grader = grade_prompt | structured_llm_grader
 
-web_search_tool = TavilySearch(max_results=3)
+web_search_tool = TavilySearchResults(max_results=3)
 
 gen_prompt = ChatPromptTemplate.from_template(
     """You are an assistant for question-answering tasks. 
@@ -168,31 +175,19 @@ for web search. Look at the input and try to reason about the underlying semanti
     return {"documents": documents, "question": better_question}
 
 
-def web_search(state):
-    """
-    Web search based on the re-phrased question using Tavily.
-    """
+def web_search(state: GraphState):
     print("---WEB SEARCH---")
     question = state["question"]
     documents = state.get("documents", [])
 
-
-    search_result = web_search_tool.invoke({"query": question})
-
-    if isinstance(search_result, dict) and "results" in search_result:
-        web_results = "\n\n".join(
-            [d["content"] for d in search_result["results"] if "content" in d]
-        )
-    else:
-       
-        web_results = str(search_result)
-
-   
-    from langchain_core.documents import Document
+    docs = web_search_tool.invoke({"query": question})
+    web_results = "\n".join([d["content"] for d in docs])
     web_results_doc = Document(page_content=web_results)
 
-    
-    documents.append(web_results_doc)
+    if documents is not None:
+        documents.append(web_results_doc)
+    else:
+        documents = [web_results_doc]
 
     return {"documents": documents, "question": question}
 
@@ -227,7 +222,6 @@ def decide_to_generate(state: GraphState):
         return "generate"
 
 
-
 workflow = StateGraph(GraphState)
 
 workflow.add_node("retrieve", retrieve)
@@ -253,12 +247,11 @@ workflow.add_edge("generate", END)
 app = workflow.compile()
 
 
-
 if __name__ == "__main__":
     inputs = {"question": "What are the key components of LLM agents?"}
 
     print("\n" + "=" * 60)
-    print("Running Corrective RAG...")
+    print("Running Corrective RAG (Groq)...")
     print("=" * 60 + "\n")
 
     final_state = None
