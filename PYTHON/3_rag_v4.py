@@ -12,21 +12,21 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 
 from langchain_groq import ChatGroq
-from langchain_community.embeddings import HuggingFaceEmbeddings   # free local embeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings   
 
 warnings.filterwarnings("ignore")
 
-# ====================== CONFIG ======================
+
 PDF_PATH = "islr.pdf"
 INDEX_ROOT = Path(".indices")
 
-# ===== Groq API Key =====
-GROQ_API_KEY = "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"   # ← yahan apni Groq key paste karo
+
+GROQ_API_KEY = "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"   
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
-# ====================== Models ======================
+
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",   # best free model
+    model="llama-3.3-70b-versatile",   
     temperature=0,
     api_key=GROQ_API_KEY,
 )
@@ -36,7 +36,7 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# ====================== Functions ======================
+
 def load_pdf(path):
     return PyPDFLoader(path).load()
 
@@ -103,7 +103,7 @@ def ask(question):
     chain = build_chain(vectorstore)
     return chain.invoke(question)
 
-# ====================== MAIN ======================
+
 if __name__ == "__main__":
     if not Path(PDF_PATH).exists():
         print(f"Error: '{PDF_PATH}' not found!")
