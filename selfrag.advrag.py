@@ -58,9 +58,6 @@ class State(TypedDict):
     isuse: Literal["useful", "not_useful"]
     use_reason: str
 
-# -----------------------------
-# 1) Decide retrieval
-# -----------------------------
 class RetrieveDecision(BaseModel):
     should_retrieve: bool = Field(
         ...,
@@ -91,9 +88,6 @@ def decide_retrieval(state: State):
 def route_after_decide(state: State) -> Literal["generate_direct", "retrieve"]:
     return "retrieve" if state["need_retrieval"] else "generate_direct"
 
-# -----------------------------
-# 2) Direct answer
-# -----------------------------
 direct_generation_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -110,16 +104,10 @@ def generate_direct(state: State):
     out = llm.invoke(direct_generation_prompt.format_messages(question=state["question"]))
     return {"answer": out.content}
 
-# -----------------------------
-# 3) Retrieve
-# -----------------------------
 def retrieve(state: State):
     q = state.get("retrieval_query") or state["question"]
     return {"docs": retriever.invoke(q)}
 
-# -----------------------------
-# 4) Relevance filter
-# -----------------------------
 class RelevanceDecision(BaseModel):
     is_relevant: bool = Field(
         ...,
@@ -166,9 +154,6 @@ def route_after_relevance(state: State) -> Literal["generate_from_context", "no_
         return "generate_from_context"
     return "no_answer_found"
 
-# -----------------------------
-# 5) Generate from context
-# -----------------------------
 rag_generation_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -195,9 +180,6 @@ def generate_from_context(state: State):
 def no_answer_found(state: State):
     return {"answer": "No answer found.", "context": ""}
 
-# -----------------------------
-# 6) IsSUP + revise
-# -----------------------------
 class IsSUPDecision(BaseModel):
     issup: Literal["fully_supported", "partially_supported", "no_support"]
     evidence: List[str] = Field(default_factory=list)
@@ -286,9 +268,6 @@ def revise_answer(state: State):
         "retries": state.get("retries", 0) + 1,
     }
 
-# -----------------------------
-# 7) IsUSE + Rewrite
-# -----------------------------
 class IsUSEDecision(BaseModel):
     isuse: Literal["useful", "not_useful"]
     reason: str = Field(..., description="Short reason in 1 line.")
@@ -373,9 +352,6 @@ def rewrite_question(state: State):
         "context": "",
     }
 
-# -----------------------------
-# Build Graph
-# -----------------------------
 g = StateGraph(State)
 
 g.add_node("decide_retrieval", decide_retrieval)
