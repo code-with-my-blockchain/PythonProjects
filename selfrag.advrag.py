@@ -82,11 +82,12 @@ decide_retrieval_prompt = ChatPromptTemplate.from_messages(
 should_retrieve_llm = llm.with_structured_output(RetrieveDecision)
 
 def decide_retrieval(state: State):
-    # Temporary: hamesha retrieve karo
+  
     return {"need_retrieval": True}
 
 def route_after_decide(state: State) -> Literal["generate_direct", "retrieve"]:
     return "retrieve" if state["need_retrieval"] else "generate_direct"
+
 
 direct_generation_prompt = ChatPromptTemplate.from_messages(
     [
@@ -104,9 +105,11 @@ def generate_direct(state: State):
     out = llm.invoke(direct_generation_prompt.format_messages(question=state["question"]))
     return {"answer": out.content}
 
+
 def retrieve(state: State):
     q = state.get("retrieval_query") or state["question"]
     return {"docs": retriever.invoke(q)}
+
 
 class RelevanceDecision(BaseModel):
     is_relevant: bool = Field(
@@ -154,6 +157,7 @@ def route_after_relevance(state: State) -> Literal["generate_from_context", "no_
         return "generate_from_context"
     return "no_answer_found"
 
+
 rag_generation_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -179,6 +183,7 @@ def generate_from_context(state: State):
 
 def no_answer_found(state: State):
     return {"answer": "No answer found.", "context": ""}
+
 
 class IsSUPDecision(BaseModel):
     issup: Literal["fully_supported", "partially_supported", "no_support"]
@@ -268,6 +273,7 @@ def revise_answer(state: State):
         "retries": state.get("retries", 0) + 1,
     }
 
+
 class IsUSEDecision(BaseModel):
     isuse: Literal["useful", "not_useful"]
     reason: str = Field(..., description="Short reason in 1 line.")
@@ -351,6 +357,7 @@ def rewrite_question(state: State):
         "relevant_docs": [],
         "context": "",
     }
+
 
 g = StateGraph(State)
 
