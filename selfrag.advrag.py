@@ -39,7 +39,7 @@ retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 llm = ChatGroq(
     model="llama-3.3-70b-versatile",
     temperature=0,
-    groq_api_key="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",
+    groq_api_key="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",
 )
 
 
