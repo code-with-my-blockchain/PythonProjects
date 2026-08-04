@@ -5,11 +5,11 @@ BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 st.set_page_config(
     page_title="Enterprise AI Knowledge Assistant",
-    page_icon="🤖",
+    page_icon="",
     layout="wide"
 )
 
-st.title("🤖 Enterprise AI Knowledge Assistant")
+st.title(" Enterprise AI Knowledge Assistant")
 st.caption("Powered by RAG & FastAPI Backend Engine")
 
 if "token" not in st.session_state:
@@ -18,7 +18,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 with st.sidebar:
-    st.header("🔑 Authentication")
+    st.header(" Authentication")
     
     if not st.session_state.token:
         username = st.text_input("Username", value="admin")
@@ -40,14 +40,14 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Cannot connect to backend: {e}")
     else:
-        st.success("Status: Authenticated 🔒")
+        st.success("Status: Authenticated ")
         if st.button("Logout"):
             st.session_state.token = None
             st.session_state.messages = []
             st.rerun()
 
     st.markdown("---")
-    st.header("📄 Knowledge Base")
+    st.header(" Knowledge Base")
     
     # Document Upload Section
     uploaded_file = st.file_uploader("Upload PDF / Text Document", type=["pdf", "txt"])
@@ -69,7 +69,7 @@ with st.sidebar:
             st.warning("Please login first to upload documents.")
 
 if not st.session_state.token:
-    st.info("👈 Please login from the sidebar to start chatting with the Knowledge Assistant.")
+    st.info(" Please login from the sidebar to start chatting with the Knowledge Assistant.")
 else:
    
     for message in st.session_state.messages:
