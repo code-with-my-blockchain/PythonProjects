@@ -4,9 +4,6 @@ in the standard "typing" module.
 Example usage::
     from typing_inspect import is_generic_type
 """
-
-# NOTE: This module must support Python 2.7 in addition to Python 3.x
-
 import sys
 import types
 import typing
@@ -14,19 +11,17 @@ import typing_extensions
 
 from mypy_extensions import _TypedDictMeta as _TypedDictMeta_Mypy
 
-# See comments in typing_extensions source on why the switch is at 3.9.2
+
 if (3, 4, 0) <= sys.version_info[:3] < (3, 9, 2):
     from typing_extensions import _TypedDictMeta as _TypedDictMeta_TE
 elif sys.version_info[:3] >= (3, 9, 2):
-    # Situation with typing_extensions.TypedDict is complicated.
-    # Use the one defined in typing_extentions, and if there is none,
-    # fall back to typing.
+
     try:
         from typing_extensions import _TypedDictMeta as _TypedDictMeta_TE
     except ImportError:
         from typing import _TypedDictMeta as _TypedDictMeta_TE
 else:
-    # typing_extensions.TypedDict is a re-export from typing.
+   
     from typing import TypedDict
     _TypedDictMeta_TE = type(TypedDict)
 
@@ -59,28 +54,28 @@ else:
     try:
         from typing import _Union, _ClassVar
     except ImportError:
-        # support for very old typing module <=3.5.3
+       
         _Union = type(Union)
         WITH_CLASSVAR = False
         LEGACY_TYPING = True
 
-    try:  # python 3.6
+    try:  
         from typing_extensions import _Final
-    except ImportError:  # python 2.7
+    except ImportError:  
         try:
             from typing import _Final
         except ImportError:
             WITH_FINAL = False
 
-    try:  # python 3.6
+    try:  
         from typing_extensions import Literal
-    except ImportError:  # python 2.7
+    except ImportError:  
         try:
             from typing import Literal
         except ImportError:
             WITH_LITERAL = False
 
-    try:  # python < 3.5.2
+    try: 
         from typing_extensions import NewType
     except ImportError:
         try:
@@ -191,7 +186,7 @@ def is_optional_type(tp):
     to use this method in combination with `get_constraints` and `get_bound`
     """
 
-    if tp is type(None):  # noqa
+    if tp is type(None):  
         return True
     elif is_union_type(tp):
         return any(is_optional_type(tt) for tt in get_args(tp, evaluate=True))
@@ -300,8 +295,7 @@ def is_new_type(tp):
                 (getattr(tp, '__supertype__', None) is not None and
                  getattr(tp, '__qualname__', '') == 'NewType.<locals>.new_type' and
                  tp.__module__ in ('typing', 'typing_extensions')))
-    else:  # python 2
-        # __qualname__ is not available in python 2, so we simplify the test here
+    else: 
         return (tp is NewType or
                 (getattr(tp, '__supertype__', None) is not None and
                  tp.__module__ in ('typing', 'typing_extensions')))
@@ -391,7 +385,7 @@ def get_parameters(tp):
         get_parameters(Mapping[T, Tuple[S_co, T]]) == (T, S_co)
     """
     if LEGACY_TYPING:
-        # python <= 3.5.2
+        
         if is_union_type(tp):
             params = []
             for arg in (tp.__union_params__ if tp.__union_params__ is not None else ()):
@@ -529,7 +523,6 @@ def get_args(tp, evaluate=None):
     if NEW_TYPING:
         if evaluate is not None and not evaluate:
             raise ValueError('evaluate can only be True in Python >= 3.7')
-        # Note special aliases on Python 3.9 don't have __args__.
         if isinstance(tp, typingGenericAlias) and hasattr(tp, '__args__'):
             res = tp.__args__
             if get_origin(tp) is collections.abc.Callable and res[0] is not Ellipsis:
@@ -549,18 +542,18 @@ def get_args(tp, evaluate=None):
         try:
             tree = tp._subs_tree()
         except AttributeError:
-            # Old python typing module <= 3.5.3
+          
             if is_union_type(tp):
-                # backport of union's subs_tree
+         
                 tree = _union_subs_tree(tp)
             elif is_generic_type(tp):
-                # backport of GenericMeta's subs_tree
+               
                 tree = _generic_subs_tree(tp)
             elif is_tuple_type(tp):
                 # ad-hoc (inspired by union)
                 tree = _tuple_subs_tree(tp)
             else:
-                # tree = _subs_tree(tp)
+           
                 return ()
 
         if isinstance(tree, tuple) and len(tree) > 1:
@@ -670,14 +663,13 @@ def get_forward_arg(fr):
     return fr.__forward_arg__ if is_forward_ref(fr) else None
 
 
-# A few functions backported and adapted for the LEGACY_TYPING context, and used above
+
 
 def _replace_arg(arg, tvars, args):
     """backport of _replace_arg"""
     if tvars is None:
         tvars = []
-    # if hasattr(arg, '_subs_tree') and isinstance(arg, (GenericMeta, _TypingBase)):
-    #     return arg._subs_tree(tvars, args)
+  
     if is_union_type(arg):
         return _union_subs_tree(arg, tvars, args)
     if is_tuple_type(arg):
@@ -694,7 +686,7 @@ def _replace_arg(arg, tvars, args):
 def _remove_dups_flatten(parameters):
     """backport of _remove_dups_flatten"""
 
-    # Flatten out Union[Union[...], ...].
+    
     params = []
     for p in parameters:
         if isinstance(p, _Union):  # and p.__origin__ is Union:
@@ -703,7 +695,7 @@ def _remove_dups_flatten(parameters):
             params.extend(p[1:])
         else:
             params.append(p)
-    # Weed out strict duplicates, preserving the first of each occurrence.
+   
     all_params = set(params)
     if len(all_params) < len(params):
         new_params = []
@@ -713,11 +705,7 @@ def _remove_dups_flatten(parameters):
                 all_params.remove(t)
         params = new_params
         assert not all_params, all_params
-    # Weed out subclasses.
-    # E.g. Union[int, Employee, Manager] == Union[int, Employee].
-    # If object is present it will be sole survivor among proper classes.
-    # Never discard type variables.
-    # (In particular, Union[str, AnyStr] != AnyStr.)
+  
     all_params = set(params)
     for t1 in params:
         if not isinstance(t1, type):
@@ -744,13 +732,13 @@ def _subs_tree(cls, tvars=None, args=None):
         if not is_union_type(cls) and not is_tuple_type(cls):
             return cls
 
-    # Make of chain of origins (i.e. cls -> cls.__origin__)
+
     orig_chain = []
     while _get_origin(current) is not None:
         orig_chain.append(current)
         current = _get_origin(current)
 
-    # Replace type variables in __args__ if asked ...
+ 
     tree_args = []
 
     def _get_args(cls):
@@ -767,7 +755,7 @@ def _subs_tree(cls, tvars=None, args=None):
 
     for arg in _get_args(cls):
         tree_args.append(_replace_arg(arg, tvars, args))
-    # ... then continue replacing down the origin chain.
+  
     for ocls in orig_chain:
         new_tree_args = []
         for arg in _get_args(ocls):
@@ -781,7 +769,7 @@ def _union_subs_tree(tp, tvars=None, args=None):
     if tp is Union:
         return Union  # Nothing to substitute
     tree_args = _subs_tree(tp, tvars, args)
-    # tree_args = tp.__union_params__ if tp.__union_params__ is not None else ()
+  
     tree_args = _remove_dups_flatten(tree_args)
     if len(tree_args) == 1:
         return tree_args[0]  # Union of a single type is that type
