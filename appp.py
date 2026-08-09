@@ -1,104 +1,113 @@
-import streamlit as st
+import json
+import os
+import random
 import requests
-
-BASE_URL = "http://127.0.0.1:8000/api/v1"
+import streamlit as st
 
 st.set_page_config(
-    page_title="Enterprise AI Knowledge Assistant",
-    page_icon="",
-    layout="wide"
+    page_title="AI CHATBOT", page_icon="", layout="wide"
 )
 
-st.title(" Enterprise AI Knowledge Assistant")
-st.caption("Powered by RAG & FastAPI Backend Engine")
+API_URL = "http://127.0.0.1:8000/api/v1/chat"
+HISTORY_FILE = "chat_history.json"
 
-if "token" not in st.session_state:
-    st.session_state.token = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+
+def save_history(history_data):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history_data, f)
+
+
+
+if "conversations" not in st.session_state:
+    st.session_state.conversations = load_history()
+
+
+if "active_conv_id" not in st.session_state:
+    new_id = str(random.randint(100000, 999999))
+    st.session_state.active_conv_id = new_id
+    st.session_state.conversations[new_id] = []
+    save_history(st.session_state.conversations)
+
 
 with st.sidebar:
-    st.header(" Authentication")
-    
-    if not st.session_state.token:
-        username = st.text_input("Username", value="admin")
-        password = st.text_input("Password", type="password")
-        
-        if st.button("Login"):
-            try:
-                response = requests.post(
-                    f"{BASE_URL}/auth/login",
-                    data={"username": username, "password": password},
-                    proxies={"http": None, "https": None}
-                )
-                if response.status_code == 200:
-                    st.session_state.token = response.json().get("access_token")
-                    st.success("Successfully logged in!")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
-            except Exception as e:
-                st.error(f"Cannot connect to backend: {e}")
-    else:
-        st.success("Status: Authenticated ")
-        if st.button("Logout"):
-            st.session_state.token = None
-            st.session_state.messages = []
-            st.rerun()
+    st.title("Chats")
+
+    if st.button("New Chat", use_container_width=True):
+        new_id = str(random.randint(100000, 999999))
+        st.session_state.active_conv_id = new_id
+        st.session_state.conversations[new_id] = []
+        save_history(st.session_state.conversations)
+        st.rerun()
+
+    if st.button("Clear All History", use_container_width=True):
+        st.session_state.conversations = {}
+        new_id = str(random.randint(100000, 999999))
+        st.session_state.active_conv_id = new_id
+        st.session_state.conversations[new_id] = []
+        save_history(st.session_state.conversations)
+        st.rerun()
 
     st.markdown("---")
-    st.header(" Knowledge Base")
-    
-    
-    uploaded_file = st.file_uploader("Upload PDF / Text Document", type=["pdf", "txt"])
-    if uploaded_file and st.button("Upload & Index"):
-        if st.session_state.token:
-            headers = {"Authorization": f"Bearer {st.session_state.token}"}
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-            
-            with st.spinner("Processing document..."):
-                try:
-                    res = requests.post(f"{BASE_URL}/documents/upload", headers=headers, files=files)
-                    if res.status_code == 200:
-                        st.success("Document uploaded & indexed!")
-                    else:
-                        st.error(f"Upload failed: {res.text}")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-        else:
-            st.warning("Please login first to upload documents.")
-
-if not st.session_state.token:
-    st.info(" Please login from the sidebar to start chatting with the Knowledge Assistant.")
-else:
-   
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-  
-    if prompt := st.chat_input("Ask anything about your uploaded documents..."):
-       
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    st.subheader("Previous Chats")
 
     
-        headers = {"Authorization": f"Bearer {st.session_state.token}"}
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    res = requests.post(
-                        f"{BASE_URL}/chat/query",
-                        headers=headers,
-                        json={"query": prompt}
-                    )
-                    if res.status_code == 200:
-                        bot_response = res.json().get("response", "No response received.")
-                    else:
-                        bot_response = f"Error: {res.status_code} - {res.text}"
-                except Exception as e:
-                    bot_response = f"Failed to connect to AI Engine: {e}"
+    for conv_id in list(st.session_state.conversations.keys()):
+        msgs = st.session_state.conversations[conv_id]
+        if msgs:  
+            label = f" {msgs[0]['content'].split('\n')[0][:20]}..."
+            if st.button(
+                label, key=f"session_{conv_id}", use_container_width=True
+            ):
+                st.session_state.active_conv_id = conv_id
+                st.rerun()
 
-                st.markdown(bot_response)
-                st.session_state.messages.append({"role": "assistant", "content": bot_response})
+
+st.title("AI CHATBOT")
+
+active_id = st.session_state.active_conv_id
+messages = st.session_state.conversations.get(active_id, [])
+
+for msg in messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+
+if user_query := st.chat_input("Ask anything about document..."):
+    messages.append({"role": "user", "content": user_query})
+    with st.chat_message("user"):
+        st.markdown(user_query)
+
+    conv_id_int = (
+        int(active_id)
+        if str(active_id).isdigit()
+        else random.randint(100000, 999999)
+    )
+    payload = {"question": str(user_query), "conversation_id": conv_id_int}
+
+    with st.chat_message("assistant"):
+        with st.spinner("Searching document..."):
+            try:
+                res = requests.post(API_URL, json=payload, timeout=30)
+                bot_response = (
+                    res.json().get("answer", "No answer found.")
+                    if res.status_code == 200
+                    else f" Error: {res.status_code}"
+                )
+            except Exception as e:
+                bot_response = f"Connection Error: {str(e)}"
+
+            st.markdown(bot_response)
+            messages.append({"role": "assistant", "content": bot_response})
+
+    st.session_state.conversations[active_id] = messages
+    save_history(st.session_state.conversations)
