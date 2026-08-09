@@ -31,7 +31,7 @@ def auto_load_documents_from_dir():
 
             print(f"Auto-indexing document: {filename}")
 
-            # 1. Text Extract karein
+            
             raw_text = ""
             if filename.lower().endswith(".pdf"):
                 try:
