@@ -30,7 +30,7 @@ async def upload_document(
     Upload a document (Admin only).
     Supported formats: PDF, DOCX, TXT, Markdown, CSV, Excel
     """
-    # Validate extension
+    
     filename = file.filename or "unknown"
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in ALLOWED_EXTENSIONS:
@@ -39,7 +39,7 @@ async def upload_document(
             detail=f"Unsupported file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    # Read file content
+   
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Max 50MB allowed.")
@@ -47,7 +47,7 @@ async def upload_document(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Create document record
+   
     doc = DocumentService.create_document(
         db=db,
         file_content=content,
@@ -59,7 +59,7 @@ async def upload_document(
         tags=tags,
     )
 
-    # Auto process & index
+   
     if auto_index:
         try:
             doc = DocumentService.process_and_index(db, doc.id)
