@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Enterprise AI Knowledge Assistant")
+app = FastAPI(title="AI CHATBOT")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,13 +26,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCUMENTS_DIR = os.path.join(BASE_DIR, "documents")
 
 
-def extract_accurate_block(query: str, text: str) -> str:
-    """Document ko logical sections/blocks mein break karke sab se relevant complete block return karta hai"""
-
-  
-    raw_blocks = re.split(r"\n(?=[•\- A-Z0-9]{1,5}[\.\:\-])|\n\n+", text)
-
-    blocks = [b.strip() for b in raw_blocks if b.strip()]
+def extract_accurate_block(query: str, raw_text: str) -> str:
+    
+    clean_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
 
     
     stopwords = {
@@ -48,55 +44,116 @@ def extract_accurate_block(query: str, text: str) -> str:
         "ki",
         "ka",
         "ko",
-        "detail",
-        "samjha",
-        "do",
-        "specs",
         "mein",
-        "report",
-        "exact",
-        "kya",
         "hai",
+        "batao",
+        "do",
+        "bare",
+        "data",
+        "predictions",
+        "tell",
+        "me",
+        "about",
+        "main",
+        "key",
+        "points",
+        "se",
+        "par",
+        "show",
+        "give",
+        "karo",
+        "mily",
+        "detail",
     }
-    keywords = [
+
+    words = [
         w.lower()
         for w in re.findall(r"\w+", query)
         if len(w) > 1 and w.lower() not in stopwords
     ]
 
-    if not keywords:
-        keywords = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 1]
+    if not words:
+        return  "Please ask a specific keyword query (e.g., BTC, Gold, EUR/USD, CPU, RAM)."
 
-    
-    best_score = 0
-    best_blocks = []
+     
+    lines = [
+        line.strip()
+        for line in re.split(r"[\n\.]+", clean_text)
+        if len(line.strip()) > 15
+    ]
 
-    for block in blocks:
-        block_lower = block.lower()
-        
-        score = sum(2 if kw in block_lower else 0 for kw in keywords)
+    content_lines = []
+    for line in lines:
+        if any(
+            line.startswith(prefix)
+            for prefix in [
+                "DOCUMENT METADATA",
+                "System Target",
+                "Version",
+                "File Name",
+                "Target Directory",
+                "END OF SPECIFICATION",
+                "=",
+            ]
+        ):
+            continue
+        content_lines.append(line)
 
-        
-        if any(term in query.lower() for term in ["xau", "gold", "eur/usd", "btc", "workstation"]):
-            for term in ["xau", "gold", "eur/usd", "btc", "workstation"]:
-                if term in query.lower() and term in block_lower:
-                    score += 5
+   
+    matched_results = []
+    for line in content_lines:
+        line_lower = line.lower()
+        score = 0
+        for w in words:
+            if re.search(r"\b" + re.escape(w) + r"\b", line_lower):
+                score += 5
+            elif w in line_lower:
+                score += 2
 
         if score > 0:
-            best_blocks.append((score, block))
+            matched_results.append((score, line))
+
+   
+    trading_keywords = {
+        "btc",
+        "bitcoin",
+        "gold",
+        "xau",
+        "eur",
+        "gbp",
+        "forex",
+        "trading",
+    }
+    if any(tk in query.lower() for tk in trading_keywords):
+        for line in content_lines:
+            line_lower = line.lower()
+            if any(
+                rk in line_lower
+                for rk in ["risk", "drawdown", "win rate", "circuit breaker"]
+            ):
+                if not any(line == item[1] for item in matched_results):
+                    matched_results.append((3, line))
+
+    if not matched_results:
+        return (
+            "No details found regarding documents."
+        )
 
     
-    best_blocks.sort(key=lambda x: x[0], reverse=True)
+    matched_results.sort(key=lambda x: x[0], reverse=True)
 
-    if not best_blocks:
-        return "no answer found regarding document."
+    top_answers = []
+    for score, line in matched_results:
+        clean_line = line.strip("• ").strip()
+        if clean_line not in top_answers:
+            top_answers.append(clean_line)
+        if len(top_answers) >= 4:  
+            break
 
-    
-    top_matched = [b[1] for b in best_blocks[:2]]
-    return "\n\n---\n\n".join(top_matched)
+    return "\n\n".join([f"• {ans}" for ans in top_answers])
 
 
-def get_latest_document():
+def get_latest_document() -> Optional[str]:
     if not os.path.exists(DOCUMENTS_DIR):
         return None
     files = [
@@ -118,7 +175,7 @@ async def direct_chat(request: ChatRequest):
     try:
         raw_content = get_latest_document()
         if not raw_content:
-            answer = "Error: `documents/` folder mein koi `.txt` file nahi mili."
+            answer = " Error: `backend/documents/`"
         else:
             answer = extract_accurate_block(request.question, raw_content)
 
