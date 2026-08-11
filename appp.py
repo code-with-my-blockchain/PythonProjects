@@ -1,69 +1,88 @@
-import json
-import os
 import random
 import requests
 import streamlit as st
+from supabase import create_client
 
 st.set_page_config(
     page_title="AI CHATBOT", page_icon="", layout="wide"
 )
 
+
 API_URL = "http://127.0.0.1:8000/api/v1/chat"
-HISTORY_FILE = "chat_history.json"
+SUPABASE_URL = "https://wmlvketrqisdstimpczq.supabase.co"
+SUPABASE_KEY = "sb_publishable_j9_mydLlQf2Ft4n3l02Uzg_cM_P2mDY"
+
+
+@st.cache_resource
+def init_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+db = init_supabase()
+
 
 
 def load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+    try:
+        response = db.table("chat_history").select("*").execute()
+        history = {}
+        for row in response.data:
+            history[str(row["conversation_id"])] = row["messages"]
+        return history
+    except Exception as e:
+        st.error(f"Supabase Load Error: {e}")
+        return {}
 
 
-def save_history(history_data):
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history_data, f)
+def save_conversation(conv_id, messages):
+    try:
+        data = {"conversation_id": str(conv_id), "messages": messages}
+        db.table("chat_history").upsert(data).execute()
+    except Exception as e:
+        st.error(f"Supabase Save Error: {e}")
 
+
+def delete_all_history():
+    try:
+        db.table("chat_history").delete().neq(
+            "conversation_id", "0"
+        ).execute()
+    except Exception as e:
+        st.error(f"Supabase Clear Error: {e}")
 
 
 if "conversations" not in st.session_state:
     st.session_state.conversations = load_history()
 
-
 if "active_conv_id" not in st.session_state:
     new_id = str(random.randint(100000, 999999))
     st.session_state.active_conv_id = new_id
     st.session_state.conversations[new_id] = []
-    save_history(st.session_state.conversations)
-
 
 with st.sidebar:
-    st.title("Chats")
+    st.title("CHATs")
 
-    if st.button("New Chat", use_container_width=True):
+    if st.button(" New Chat", use_container_width=True):
         new_id = str(random.randint(100000, 999999))
         st.session_state.active_conv_id = new_id
         st.session_state.conversations[new_id] = []
-        save_history(st.session_state.conversations)
         st.rerun()
 
-    if st.button("Clear All History", use_container_width=True):
+    if st.button( "Clear Chat History", use_container_width=True):
+        delete_all_history()
         st.session_state.conversations = {}
         new_id = str(random.randint(100000, 999999))
         st.session_state.active_conv_id = new_id
         st.session_state.conversations[new_id] = []
-        save_history(st.session_state.conversations)
         st.rerun()
 
     st.markdown("---")
     st.subheader("Previous Chats")
 
-    
-    for conv_id in list(st.session_state.conversations.keys()):
+
+    for conv_id in reversed(list(st.session_state.conversations.keys())):
         msgs = st.session_state.conversations[conv_id]
-        if msgs:  
+        if msgs:
             label = f" {msgs[0]['content'].split('\n')[0][:20]}..."
             if st.button(
                 label, key=f"session_{conv_id}", use_container_width=True
@@ -81,8 +100,7 @@ for msg in messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-
-if user_query := st.chat_input("Ask anything about document..."):
+if user_query := st.chat_input("ASK ANYTHING ABOUT YOUR DOCUMENT..."):
     messages.append({"role": "user", "content": user_query})
     with st.chat_message("user"):
         st.markdown(user_query)
@@ -104,10 +122,11 @@ if user_query := st.chat_input("Ask anything about document..."):
                     else f" Error: {res.status_code}"
                 )
             except Exception as e:
-                bot_response = f"Connection Error: {str(e)}"
+                bot_response = f" Connection Error: {str(e)}"
 
             st.markdown(bot_response)
             messages.append({"role": "assistant", "content": bot_response})
 
+   
     st.session_state.conversations[active_id] = messages
-    save_history(st.session_state.conversations)
+    save_conversation(active_id, messages)
