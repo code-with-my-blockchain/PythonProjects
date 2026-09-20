@@ -1,0 +1,11 @@
+langchain
+langchain-openrouter
+langchain-community
+langchain-text-splitters
+langchain-chroma
+langchain-huggingface
+textloader
+chromadb
+python-dotenv
+sentence-transformers
+C:\Users\user\PythonProjects\.venv\Scripts\python.exe
