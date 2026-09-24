@@ -1,27 +1,29 @@
 import os
 
 from dotenv import load_dotenv
-from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+
 from langchain_chroma import Chroma
+from langchain_community.document_loaders import TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openrouter import ChatOpenRouter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+load_dotenv()
+
+OPENROUTER_API_KEY = os.getenv("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")
 
 
 
-
-
-file_path = r"C:\Users\user\Desktop\Python Projects\test.txt"
-
+file_path = r"C:\Users\user\OneDrive\Desktop\python Practice\test.txt"
 
 
 loader = TextLoader(
-    r"C:\Users\user\OneDrive\Desktop\python Practice\test.txt"
+    file_path,
+    encoding="utf-8"
 )
 
 documents = loader.load()
-
-# print(documents)
 
 
 text_splitter = RecursiveCharacterTextSplitter(
@@ -31,12 +33,11 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 chunks = text_splitter.split_documents(documents)
 
-print(f"Chunks created: {len(chunks)}")
-
 
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
+
 
 vectorstore = Chroma.from_documents(
     documents=chunks,
@@ -45,23 +46,20 @@ vectorstore = Chroma.from_documents(
     persist_directory="./chroma_db"
 )
 
+
 retriever = vectorstore.as_retriever(
-    search_kwargs={"k": 4}
+    search_kwargs={"k": 2}
 )
+
 
 llm = ChatOpenRouter(
-    model="openai/gpt-4o-mini",
-    openrouter_api_key="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",
-    app_url="http://localhost:6311",
-    app_title = "CHAT-BOT",
-
+    model="openai/gpt-4o-mini"
 )
-
-
 
 
 print("\nReady to chat!")
 print("Type 'exit' to stop.\n")
+
 
 while True:
 
@@ -76,27 +74,56 @@ while True:
 
     relevant_docs = retriever.invoke(question)
 
-    context = "\n\n".join(
-        doc.page_content
-        for doc in relevant_docs
-    )
+    context_parts = []
 
- prompt = f"""
-Answer the question using ONLY the context below.
+    for doc in relevant_docs:
+        context_parts.append(doc.page_content)
 
-If the answer is not available in the context, say:
-"I could not find this information in the document."
+    context = "\n\n".join(context_parts)
 
-Do not make up information.
 
-PDF CONTEXT:
+    prompt = f"""
+You are an extremely concise and precise question-answering assistant.
+
+Answer the user's question using ONLY the information provided
+in the CONTEXT.
+
+Rules:
+
+1. Give a direct and short answer.
+2. Maximum 1-3 sentences.
+3. Do not repeat the question.
+4. Do not mention sources.
+5. Do not write [Source 1], [Source 2], etc.
+6. Do not add citations.
+7. Do not add headings.
+8. Do not add extra formatting.
+
+If the answer is not present in the context, reply exactly:
+
+I could not find this information in the document.
+
+CONTEXT:
+
 {context}
 
 QUESTION:
+
 {question}
+
+DIRECT ANSWER:
 """
 
     response = llm.invoke(prompt)
 
-    print("\nAns:", response.content)
-    print()
+    answer = response.content.strip()
+
+    answer = answer.replace("[Source 1]", "")
+    answer = answer.replace("[Source 2]", "")
+    answer = answer.replace("[Source 3]", "")
+    answer = answer.replace("[Source 4]", "")
+    answer = answer.replace("[Source 5]", "")
+
+    print("\n" + answer.strip() + "\n")
+
+

@@ -9,3 +9,8 @@ chromadb
 python-dotenv
 sentence-transformers
 C:\Users\user\PythonProjects\.venv\Scripts\python.exe
+
+ 
+PS C:\Users\user\OneDrive\Desktop\python Practice> cd "C:\Users\user\OneDrive\Desktop\python Practice"
+PS C:\Users\user\OneDrive\Desktop\python Practice> Remove-Item -Recurse -Force ".\chroma_db" -ErrorAction SilentlyContinue
+PS C:\Users\user\OneDrive\Desktop\python Practice> streamlit run rag_chatbot_fixed.py

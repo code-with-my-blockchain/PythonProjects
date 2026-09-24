@@ -1,12 +1,21 @@
 import os
-import re
-import time
-from typing import Optional
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import shutil
+from typing import List, Dict, Any, Optional
 
-app = FastAPI(title="AI CHATBOT")
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from rag import (
+    DOCUMENTS_DIR,
+    build_vectorstore,
+    ask_question,
+)
+
+app = FastAPI(
+    title="RAG Chatbot API",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,173 +25,140 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+os.makedirs(DOCUMENTS_DIR, exist_ok=True)
+
 
 class ChatRequest(BaseModel):
     question: str
-    conversation_id: Optional[int] = 1
+    chat_history: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCUMENTS_DIR = os.path.join(BASE_DIR, "documents")
-
-
-def extract_accurate_block(query: str, raw_text: str) -> str:
-    
-    clean_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
-
-    
-    stopwords = {
-        "what",
-        "is",
-        "are",
-        "the",
-        "and",
-        "for",
-        "aur",
-        "kya",
-        "hain",
-        "ki",
-        "ka",
-        "ko",
-        "mein",
-        "hai",
-        "batao",
-        "do",
-        "bare",
-        "data",
-        "predictions",
-        "tell",
-        "me",
-        "about",
-        "main",
-        "key",
-        "points",
-        "se",
-        "par",
-        "show",
-        "give",
-        "karo",
-        "mily",
-        "detail",
+@app.get("/")
+def root():
+    return {
+        "status": "success",
+        "message": "RAG Chatbot Backend is running."
     }
 
-    words = [
-        w.lower()
-        for w in re.findall(r"\w+", query)
-        if len(w) > 1 and w.lower() not in stopwords
-    ]
 
-    if not words:
-        return  "Please ask a specific keyword query (e.g., BTC, Gold, EUR/USD, CPU, RAM)."
+@app.post("/upload")
+async def upload_document(file: UploadFile = File(...)):
+    filename = file.filename or ""
 
-     
-    lines = [
-        line.strip()
-        for line in re.split(r"[\n\.]+", clean_text)
-        if len(line.strip()) > 15
-    ]
-
-    content_lines = []
-    for line in lines:
-        if any(
-            line.startswith(prefix)
-            for prefix in [
-                "DOCUMENT METADATA",
-                "System Target",
-                "Version",
-                "File Name",
-                "Target Directory",
-                "END OF SPECIFICATION",
-                "=",
-            ]
-        ):
-            continue
-        content_lines.append(line)
-
-   
-    matched_results = []
-    for line in content_lines:
-        line_lower = line.lower()
-        score = 0
-        for w in words:
-            if re.search(r"\b" + re.escape(w) + r"\b", line_lower):
-                score += 5
-            elif w in line_lower:
-                score += 2
-
-        if score > 0:
-            matched_results.append((score, line))
-
-   
-    trading_keywords = {
-        "btc",
-        "bitcoin",
-        "gold",
-        "xau",
-        "eur",
-        "gbp",
-        "forex",
-        "trading",
-    }
-    if any(tk in query.lower() for tk in trading_keywords):
-        for line in content_lines:
-            line_lower = line.lower()
-            if any(
-                rk in line_lower
-                for rk in ["risk", "drawdown", "win rate", "circuit breaker"]
-            ):
-                if not any(line == item[1] for item in matched_results):
-                    matched_results.append((3, line))
-
-    if not matched_results:
-        return (
-            "No details found regarding documents."
+    if not filename.lower().endswith((".pdf", ".txt")):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF and TXT files are allowed."
         )
 
-    
-    matched_results.sort(key=lambda x: x[0], reverse=True)
+    file_path = os.path.join(DOCUMENTS_DIR, filename)
 
-    top_answers = []
-    for score, line in matched_results:
-        clean_line = line.strip("• ").strip()
-        if clean_line not in top_answers:
-            top_answers.append(clean_line)
-        if len(top_answers) >= 4:  
-            break
-
-    return "\n\n".join([f"• {ans}" for ans in top_answers])
-
-
-def get_latest_document() -> Optional[str]:
-    if not os.path.exists(DOCUMENTS_DIR):
-        return None
-    files = [
-        os.path.join(DOCUMENTS_DIR, f)
-        for f in os.listdir(DOCUMENTS_DIR)
-        if f.endswith(".txt")
-    ]
-    if not files:
-        return None
-    latest_file = max(files, key=os.path.getmtime)
-    with open(latest_file, "r", encoding="utf-8") as f:
-        return f.read()
-
-
-@app.post("/api/v1/chat")
-@app.post("/api/v1/chat/")
-async def direct_chat(request: ChatRequest):
-    start_time = time.time()
     try:
-        raw_content = get_latest_document()
-        if not raw_content:
-            answer = " Error: `backend/documents/`"
-        else:
-            answer = extract_accurate_block(request.question, raw_content)
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
 
         return {
-            "answer": answer,
-            "conversation_id": request.conversation_id,
-            "response_time_ms": int((time.time() - start_time) * 1000),
+            "status": "success",
+            "message": "File uploaded successfully.",
+            "filename": filename,
         }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save file: {str(e)}"
+        )
+
+
+@app.get("/documents")
+def list_documents():
+    try:
+        if not os.path.exists(DOCUMENTS_DIR):
+            return {"documents": []}
+
+        files = [
+            f for f in os.listdir(DOCUMENTS_DIR)
+            if f.lower().endswith((".pdf", ".txt"))
+        ]
+
+        return {"documents": files}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch documents: {str(e)}"
+        )
+
+
+@app.post("/index")
+def index_documents():
+    try:
+        result = build_vectorstore()
+        return {
+            "status": "success",
+            "message": "Documents indexed successfully.",
+            "documents": result.get("documents", 0),
+            "chunks": result.get("chunks", 0),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Indexing failed: {str(e)}"
+        )
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    question = request.question.strip()
+
+    if not question:
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty."
+        )
+
+    try:
+        result = ask_question(
+            question=question,
+            chat_history=request.chat_history,
+        )
+        return result
+    
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating response: {str(e)}"
+        )
+
+
+@app.delete("/documents")
+def delete_documents():
+    try:
+        if os.path.exists(DOCUMENTS_DIR):
+            for filename in os.listdir(DOCUMENTS_DIR):
+                file_path = os.path.join(DOCUMENTS_DIR, filename)
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.remove(file_path)
+
+        chroma_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "chroma_db"
+        )
+
+        if os.path.exists(chroma_dir):
+            shutil.rmtree(chroma_dir, ignore_errors=True)
+
+        return {
+            "status": "success",
+            "message": "Documents and vector database deleted successfully."
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reset store: {str(e)}"
+        )
+
+
